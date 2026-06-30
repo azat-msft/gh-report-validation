@@ -52,22 +52,8 @@ jobs:
       - name: Run CalculatorTests
         run: dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
 
-      # DIAGNOSTIC (temporary): emit a raw file-based error annotation from a passing step to
-      # confirm whether file= annotations surface independently of the failing test step.
-      - name: Diagnostic raw error annotation
-        run: echo "::error file=StringUtilsTests/StringUtilsTestsClass.cs,line=22,col=1,title=DIAG raw::diagnostic raw error message"
-
-      # DIAGNOSTIC (temporary): emit a file-based error annotation INSIDE a ::group:: block to test
-      # whether GitHub drops file annotations emitted inside a log group (as our extension does).
-      - name: Diagnostic error inside group
-        run: |
-          echo "::group::DIAG group"
-          echo "::error file=StringUtilsTests/StringUtils.cs,line=10,col=1,title=DIAG in-group::diagnostic in-group error"
-          echo "::endgroup::"
-
-      # Contains one deliberately failing test, which exercises ::error annotations and the
-      # "Failures" section of the job summary. The test host exits non-zero by design, so the
-      # step is allowed to fail without failing the whole verification job.
-      - name: Run StringUtilsTests (expected to fail - verifies failure annotations)
-        continue-on-error: true
-        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
+      # DIAGNOSTIC (temporary): run the failing project but force the step exit code to 0, to test
+      # whether GitHub suppresses our extension's ::error file= annotation only because the step
+      # itself exits non-zero.
+      - name: Diagnostic StringUtils with zero exit
+        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build || true
