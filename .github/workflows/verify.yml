@@ -52,19 +52,9 @@ jobs:
       - name: Run CalculatorTests
         run: dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
 
-      # DIAGNOSTIC (temporary): run the failing project but force the step exit code to 0, to test
-      # whether GitHub suppresses our extension's ::error file= annotation only because the step
-      # itself exits non-zero.
-      - name: Diagnostic StringUtils with zero exit
-        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build || true
-
-      # DIAGNOSTIC A (temporary): exact replica of the extension's error CONTENT via echo (no ANSI).
-      - name: Diagnostic content replica
-        run: |
-          echo '::error file=StringUtilsTests/StringUtils.cs,line=7,col=1,title=Test failed%3A IsPalindrome_FailsOnPurpose::[Test Failure] AssertionException: Expected to be true%0Abut found False%0A%0Aat Assert.That(_utils.IsPalindrome("github")).IsTrue()'
-
-      # DIAGNOSTIC B (temporary): an error line PREFIXED with a literal ESC[m, mimicking the MTP
-      # terminal output device, to test whether the ANSI prefix breaks GitHub's command parsing.
-      - name: Diagnostic ansi-prefixed error
-        run: |
-          printf '\033[m::error file=CalculatorTests/Calculator.cs,line=8,col=1,title=DIAG ansi::ansi prefixed error\n'
+      # Contains one deliberately failing test, which exercises ::error annotations and the
+      # "Failures" section of the job summary. The test host exits non-zero by design, so the
+      # step is allowed to fail without failing the whole verification job.
+      - name: Run StringUtilsTests (expected to fail - verifies failure annotations)
+        continue-on-error: true
+        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
