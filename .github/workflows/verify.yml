@@ -57,3 +57,12 @@ jobs:
       # itself exits non-zero.
       - name: Diagnostic StringUtils with zero exit
         run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build || true
+
+      # DIAGNOSTIC A (temporary): exact replica of the extension's error CONTENT via echo (no ANSI).
+      - name: Diagnostic content replica
+        run: echo '::error file=StringUtilsTests/StringUtils.cs,line=7,col=1,title=Test failed%3A IsPalindrome_FailsOnPurpose::[Test Failure] AssertionException: Expected to be true%0Abut found False%0A%0Aat Assert.That(_utils.IsPalindrome("github")).IsTrue()'
+
+      # DIAGNOSTIC B (temporary): an error line PREFIXED with a literal ESC[m, mimicking the MTP
+      # terminal output device, to test whether the ANSI prefix breaks GitHub's command parsing.
+      - name: Diagnostic ansi-prefixed error
+        run: printf '\033[m::error file=CalculatorTests/Calculator.cs,line=8,col=1,title=DIAG ansi::ansi prefixed error\n'
