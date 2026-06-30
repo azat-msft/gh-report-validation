@@ -57,6 +57,14 @@ jobs:
       - name: Diagnostic raw error annotation
         run: echo "::error file=StringUtilsTests/StringUtilsTestsClass.cs,line=22,col=1,title=DIAG raw::diagnostic raw error message"
 
+      # DIAGNOSTIC (temporary): emit a file-based error annotation INSIDE a ::group:: block to test
+      # whether GitHub drops file annotations emitted inside a log group (as our extension does).
+      - name: Diagnostic error inside group
+        run: |
+          echo "::group::DIAG group"
+          echo "::error file=StringUtilsTests/StringUtils.cs,line=10,col=1,title=DIAG in-group::diagnostic in-group error"
+          echo "::endgroup::"
+
       # Contains one deliberately failing test, which exercises ::error annotations and the
       # "Failures" section of the job summary. The test host exits non-zero by design, so the
       # step is allowed to fail without failing the whole verification job.
