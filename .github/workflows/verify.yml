@@ -48,27 +48,24 @@ jobs:
       - name: Build
         run: dotnet build gh-report-validation.slnx -c Release --no-restore
 
-      # Both test projects run with continue-on-error so every project's annotations and the job
-      # summary surface even when an earlier project fails. The "Report test outcome" step below then
-      # fails the job if any project failed, so the run conclusion reflects the failing tests.
-
-      # The slow test exercises ::notice via a low threshold.
-      - name: Run CalculatorTests
-        id: calculator
-        continue-on-error: true
-        run: dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
-
-      # Contains deliberately failing tests, which exercise ::error annotations and the
-      # "Failures" section of the job summary.
-      - name: Run StringUtilsTests
-        id: stringutils
-        continue-on-error: true
-        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
-
-      # Make the run conclusion reflect the test results: fail the job if either project failed,
-      # after both have run (so all annotations and the job summary are still produced).
-      - name: Report test outcome
-        if: steps.calculator.outcome == 'failure' || steps.stringutils.outcome == 'failure'
+      # Run BOTH test projects in a single step so the per-assembly ::group:: / ::endgroup:: sections
+      # are nested inside one log section. This proves the grouping comes from the extension's workflow
+      # commands rather than from GitHub's automatic per-step log folding (each step is its own group).
+      #
+      # 'set +e' disables the default errexit so the first failing project does not abort the step; we
+      # capture each project's exit code and fail the step at the end if either failed, so the run
+      # conclusion still reflects the test results while all annotations and the job summary are produced.
+      # The slow test in CalculatorTests exercises ::notice via a low threshold; StringUtilsTests contains
+      # deliberately failing tests that exercise ::error annotations and the "Failures" summary section.
+      - name: Run tests
         run: |
-          echo "One or more test projects failed (calculator='${{ steps.calculator.outcome }}', stringutils='${{ steps.stringutils.outcome }}')."
-          exit 1
+          set +e
+          dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
+          calculator=$?
+          dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
+          stringutils=$?
+          echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
+          if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then
+            echo "One or more test projects failed."
+            exit 1
+          fi
