@@ -48,13 +48,17 @@ jobs:
       - name: Build
         run: dotnet build gh-report-validation.slnx -c Release --no-restore
 
-      # All tests pass; the slow test exercises ::notice via a low threshold.
+      # CalculatorTests now contains a deliberately failing test caused by a PRODUCTION-code bug
+      # (Calculator.Percentage), plus a slow test that exercises ::notice via a low threshold.
+      # The test host exits non-zero by design, so the step is allowed to fail.
       - name: Run CalculatorTests
+        continue-on-error: true
         run: dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
 
-      # Contains one deliberately failing test, which exercises ::error annotations and the
-      # "Failures" section of the job summary. The test host exits non-zero by design, so the
-      # step is allowed to fail without failing the whole verification job.
+      # StringUtilsTests contains deliberately failing tests (one assertion-based, one caused by a
+      # PRODUCTION-code bug in StringUtils.FirstChar), which exercise ::error annotations and the
+      # "Failures" section of the job summary. The test host exits non-zero by design, so the step
+      # is allowed to fail without failing the whole verification job.
       - name: Run StringUtilsTests (expected to fail - verifies failure annotations)
         continue-on-error: true
         run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build

@@ -31,4 +31,15 @@ public sealed class CalculatorTestsClass
         await Task.Delay(TimeSpan.FromSeconds(3));
         await Assert.That(_calculator.Add(1, 1)).IsEqualTo(2);
     }
+
+    // Passing test for the new production method.
+    [Test]
+    public async Task Percentage_ComputesRatio()
+        => await Assert.That(_calculator.Percentage(25, 100)).IsEqualTo(25);
+
+    // Failing test caused by a bug in PRODUCTION code (Calculator.Percentage divides by zero).
+    // The failure annotation should point at Calculator.cs, not at this test file.
+    [Test]
+    public async Task Percentage_OfZeroTotal_ReturnsZero()
+        => await Assert.That(_calculator.Percentage(0, 0)).IsEqualTo(0);
 }
