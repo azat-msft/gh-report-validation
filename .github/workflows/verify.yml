@@ -1,0 +1,60 @@
+name: Verify GitHub Actions report extension
+
+# Verifies that every workflow command emitted by
+# Microsoft.Testing.Extensions.GitHubActionsReport is implemented correctly and is
+# picked up by the GitHub Actions UI:
+#   - ::group:: / ::endgroup::   -> collapsible log sections
+#   - ::error file,line,...      -> failure annotations (Annotations tab + diff gutter)
+#   - ::notice ...               -> slow-test notices (Annotations tab)
+#   - markdown -> $GITHUB_STEP_SUMMARY -> the run's Summary page
+#
+# GITHUB_ACTIONS / GITHUB_WORKSPACE / GITHUB_STEP_SUMMARY are set automatically by the
+# runner, which is what activates the extension and routes the job summary to the run page.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # The extension is consumed as a NuGet package from the committed ./local-packages feed
+      # (wired in via nuget.config), so restore connects it to the solution at build time.
+      - name: Restore
+        run: dotnet restore gh-report-validation.slnx
+
+      # Required: build the solution before running the tests.
+      - name: Build
+        run: dotnet build gh-report-validation.slnx -c Release --no-restore
+
+      # All tests pass; the slow test exercises ::notice via a low threshold.
+      - name: Run CalculatorTests
+        run: dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
+
+      # Contains one deliberately failing test, which exercises ::error annotations and the
+      # "Failures" section of the job summary. The test host exits non-zero by design, so the
+      # step is allowed to fail without failing the whole verification job.
+      - name: Run StringUtilsTests (expected to fail - verifies failure annotations)
+        continue-on-error: true
+        run: dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
