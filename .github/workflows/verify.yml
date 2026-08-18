@@ -57,6 +57,11 @@ jobs:
       # conclusion still reflects the test results while all annotations and the job summary are produced.
       # The slow test in CalculatorTests exercises ::notice via a low threshold; StringUtilsTests contains
       # deliberately failing tests that exercise ::error annotations and the "Failures" summary section.
+      #
+      # The 30 Bulk*Tests projects then run into the SAME summary file, which is the scenario under test:
+      # GitHub caps GITHUB_STEP_SUMMARY at 1 MiB for the whole step, so 30 projects each writing failure
+      # diagnostics must share that budget rather than each claiming it. If the file exceeded the cap GitHub
+      # would silently drop the entire summary, so the verification below asserts the size explicitly.
       - name: Run tests
         run: |
           set +e
@@ -66,14 +71,31 @@ jobs:
           stringutils=$?
           echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
 
+          echo "::group::Bulk test projects"
+          for project in Bulk*Tests; do
+            dotnet run --project "$project/$project.csproj" -c Release --no-build -- --report-gh > /dev/null 2>&1
+            echo "$project exited with $?"
+          done
+          echo "::endgroup::"
+
           # GITHUB_STEP_SUMMARY is a per-step file, so the summary written by the reporters above can only
           # be inspected from within this same step. Echo its size and the markers that prove which
           # rendering path was taken, so the run log documents what the Summary page shows.
           echo "::group::Job summary verification"
-          echo "Summary size: $(wc -c < "$GITHUB_STEP_SUMMARY") bytes"
+          summary_bytes=$(wc -c < "$GITHUB_STEP_SUMMARY")
+          echo "Summary size: $summary_bytes bytes"
+          echo "GitHub limit: 1048576 bytes"
+          echo "Project sections: $(grep -c '^## .* Test Run Summary' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
           grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || echo "No truncation notes (summary rendered in full)."
+
+          # The summary is only rendered by GitHub if it stays under the cap. Failing here would mean the
+          # budgeting is broken and the whole summary would have been dropped from the run page.
+          if [ "$summary_bytes" -ge 1048576 ]; then
+            echo "::error::Job summary is $summary_bytes bytes, at or over GitHub's 1 MiB limit. GitHub will drop it."
+            exit 1
+          fi
           echo "::endgroup::"
 
           if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then

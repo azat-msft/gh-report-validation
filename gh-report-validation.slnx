@@ -1,4 +1,34 @@
 <Solution>
   <Project Path="CalculatorTests/CalculatorTests.csproj" />
   <Project Path="StringUtilsTests/StringUtilsTests.csproj" />
+  <Project Path="Bulk01Tests/Bulk01Tests.csproj" />
+  <Project Path="Bulk02Tests/Bulk02Tests.csproj" />
+  <Project Path="Bulk03Tests/Bulk03Tests.csproj" />
+  <Project Path="Bulk04Tests/Bulk04Tests.csproj" />
+  <Project Path="Bulk05Tests/Bulk05Tests.csproj" />
+  <Project Path="Bulk06Tests/Bulk06Tests.csproj" />
+  <Project Path="Bulk07Tests/Bulk07Tests.csproj" />
+  <Project Path="Bulk08Tests/Bulk08Tests.csproj" />
+  <Project Path="Bulk09Tests/Bulk09Tests.csproj" />
+  <Project Path="Bulk10Tests/Bulk10Tests.csproj" />
+  <Project Path="Bulk11Tests/Bulk11Tests.csproj" />
+  <Project Path="Bulk12Tests/Bulk12Tests.csproj" />
+  <Project Path="Bulk13Tests/Bulk13Tests.csproj" />
+  <Project Path="Bulk14Tests/Bulk14Tests.csproj" />
+  <Project Path="Bulk15Tests/Bulk15Tests.csproj" />
+  <Project Path="Bulk16Tests/Bulk16Tests.csproj" />
+  <Project Path="Bulk17Tests/Bulk17Tests.csproj" />
+  <Project Path="Bulk18Tests/Bulk18Tests.csproj" />
+  <Project Path="Bulk19Tests/Bulk19Tests.csproj" />
+  <Project Path="Bulk20Tests/Bulk20Tests.csproj" />
+  <Project Path="Bulk21Tests/Bulk21Tests.csproj" />
+  <Project Path="Bulk22Tests/Bulk22Tests.csproj" />
+  <Project Path="Bulk23Tests/Bulk23Tests.csproj" />
+  <Project Path="Bulk24Tests/Bulk24Tests.csproj" />
+  <Project Path="Bulk25Tests/Bulk25Tests.csproj" />
+  <Project Path="Bulk26Tests/Bulk26Tests.csproj" />
+  <Project Path="Bulk27Tests/Bulk27Tests.csproj" />
+  <Project Path="Bulk28Tests/Bulk28Tests.csproj" />
+  <Project Path="Bulk29Tests/Bulk29Tests.csproj" />
+  <Project Path="Bulk30Tests/Bulk30Tests.csproj" />
 </Solution>
