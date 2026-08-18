@@ -65,6 +65,17 @@ jobs:
           dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build -- --report-gh
           stringutils=$?
           echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
+
+          # GITHUB_STEP_SUMMARY is a per-step file, so the summary written by the reporters above can only
+          # be inspected from within this same step. Echo its size and the markers that prove which
+          # rendering path was taken, so the run log documents what the Summary page shows.
+          echo "::group::Job summary verification"
+          echo "Summary size: $(wc -c < "$GITHUB_STEP_SUMMARY") bytes"
+          echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
+          grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || echo "No truncation notes (summary rendered in full)."
+          echo "::endgroup::"
+
           if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then
             echo "One or more test projects failed."
             exit 1
