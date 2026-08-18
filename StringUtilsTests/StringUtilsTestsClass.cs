@@ -16,8 +16,7 @@ public sealed class StringUtilsTestsClass
     public async Task CountWords_CountsWords()
         => await Assert.That(_utils.CountWords("hello world foo")).IsEqualTo(3);
 
-    // Intentionally failing test to exercise failure annotations and the job summary.
     [Test]
-    public async Task IsPalindrome_FailsOnPurpose()
-        => await Assert.That(_utils.IsPalindrome("github")).IsTrue();
+    public async Task IsPalindrome_RejectsNonPalindrome()
+        => await Assert.That(_utils.IsPalindrome("github")).IsFalse();
 }
