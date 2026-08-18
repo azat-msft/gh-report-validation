@@ -60,9 +60,9 @@ jobs:
       - name: Run tests
         run: |
           set +e
-          dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
+          dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh --report-gh-slow-test-threshold 1
           calculator=$?
-          dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
+          dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build -- --report-gh
           stringutils=$?
           echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
           if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then
