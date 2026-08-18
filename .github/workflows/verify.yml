@@ -72,10 +72,16 @@ jobs:
           echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
 
           echo "::group::Bulk test projects"
+          bulk_failures=0
           for project in Bulk*Tests; do
             dotnet run --project "$project/$project.csproj" -c Release --no-build -- --report-gh > /dev/null 2>&1
-            echo "$project exited with $?"
+            bulk_exit=$?
+            echo "$project exited with $bulk_exit"
+            if [ $bulk_exit -ne 0 ]; then
+              bulk_failures=$((bulk_failures + 1))
+            fi
           done
+          echo "Bulk projects with failures: $bulk_failures"
           echo "::endgroup::"
 
           # GITHUB_STEP_SUMMARY is a per-step file, so the summary written by the reporters above can only
@@ -98,7 +104,7 @@ jobs:
           fi
           echo "::endgroup::"
 
-          if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then
+          if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ] || [ $bulk_failures -ne 0 ]; then
             echo "One or more test projects failed."
             exit 1
           fi
