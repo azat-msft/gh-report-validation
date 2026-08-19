@@ -1,0 +1,99 @@
+name: Probe job summary size limit
+
+# Determines empirically what GitHub does when a job summary exceeds the documented 1 MiB limit:
+# truncate it, or discard it entirely.
+#
+# Each job writes a summary with a distinctive START marker at the beginning and an END marker at
+# the very end. The markers make the two outcomes distinguishable without ambiguity:
+#
+#   * Truncated -> START marker is present, END marker is missing.
+#   * Discarded -> neither marker is present, and the run shows no summary at all.
+#
+# The distinction matters because Microsoft.Testing.Extensions.GitHubActionsReport budgets its
+# output on the assumption that an oversized summary is lost in full. If GitHub actually truncates,
+# that budgeting is far more conservative than it needs to be.
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  under-limit:
+    name: "A: just under the limit (control)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write ~1048535 bytes
+        run: |
+          {
+            echo "PROBE-START-UNDER"
+            head -c 1048500 /dev/zero | tr '\0' 'u'
+            echo ""
+            echo "PROBE-END-UNDER"
+          } > "$GITHUB_STEP_SUMMARY"
+          echo "Wrote $(wc -c < "$GITHUB_STEP_SUMMARY") bytes (documented limit 1048576)"
+
+  over-limit-slightly:
+    name: "B: slightly over the limit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write ~1148535 bytes
+        run: |
+          {
+            echo "PROBE-START-SLIGHTLY-OVER"
+            head -c 1148500 /dev/zero | tr '\0' 'o'
+            echo ""
+            echo "PROBE-END-SLIGHTLY-OVER"
+          } > "$GITHUB_STEP_SUMMARY"
+          echo "Wrote $(wc -c < "$GITHUB_STEP_SUMMARY") bytes (documented limit 1048576)"
+
+  over-limit-far:
+    name: "C: far over the limit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write ~5 MiB
+        run: |
+          {
+            echo "PROBE-START-FAR-OVER"
+            head -c 5242880 /dev/zero | tr '\0' 'f'
+            echo ""
+            echo "PROBE-END-FAR-OVER"
+          } > "$GITHUB_STEP_SUMMARY"
+          echo "Wrote $(wc -c < "$GITHUB_STEP_SUMMARY") bytes (documented limit 1048576)"
+
+  boundary-exact:
+    name: "D: exactly at the documented limit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write exactly 1048576 bytes
+        run: |
+          # actions/runner#4337 reports the runner actually rejects at (1 MiB - 2) bytes, so a file
+          # of exactly the documented limit is expected to be rejected despite matching the docs.
+          python3 -c "
+          import os
+          start = 'PROBE-START-EXACT\n'
+          end = '\nPROBE-END-EXACT'
+          total = 1048576
+          filler = 'e' * (total - len(start) - len(end))
+          open(os.environ['GITHUB_STEP_SUMMARY'], 'w').write(start + filler + end)
+          "
+          echo "Wrote $(wc -c < "$GITHUB_STEP_SUMMARY") bytes (documented limit 1048576)"
+
+  boundary-minus-two:
+    name: "E: two bytes below the documented limit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write exactly 1048574 bytes
+        run: |
+          python3 -c "
+          import os
+          start = 'PROBE-START-MINUS2\n'
+          end = '\nPROBE-END-MINUS2'
+          total = 1048574
+          filler = 'm' * (total - len(start) - len(end))
+          open(os.environ['GITHUB_STEP_SUMMARY'], 'w').write(start + filler + end)
+          "
+          echo "Wrote $(wc -c < "$GITHUB_STEP_SUMMARY") bytes (documented limit 1048576)"
