@@ -122,7 +122,21 @@ jobs:
           fi
           echo "::endgroup::"
 
+          # Keep a copy for post-run structural inspection: GITHUB_STEP_SUMMARY is a per-step temp file that is
+          # consumed by the runner, so it cannot be read from a later step or downloaded afterwards.
+          cp "$GITHUB_STEP_SUMMARY" "$GITHUB_WORKSPACE/job-summary.md"
+
           if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ] || [ $bulk_failures -ne 0 ]; then
             echo "One or more test projects failed."
             exit 1
           fi
+
+      # The bulk projects fail on purpose, so the step above always ends non-zero; upload regardless so the
+      # rendered summary can be inspected after the run.
+      - name: Upload job summary for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-summary
+          path: job-summary.md
+          if-no-files-found: error
