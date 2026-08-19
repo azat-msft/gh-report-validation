@@ -97,21 +97,20 @@ jobs:
           notice_count=$(grep -c 'microsoft-testing-platform:github:summary-truncated' "$GITHUB_STEP_SUMMARY" || true)
           echo "Closing truncation notes: $notice_count"
           if [ "$notice_count" -gt 0 ]; then
-            # The note must be stated once and must sit after every section this extension wrote, otherwise it
-            # reads as a marker stranded mid-report rather than as the summary's closing statement.
+            # The note must be stated once and must lead the report: co-writers only ever append, so the top is the
+            # one position nothing else can displace, and it is where a reader meets it before the affected sections.
             if [ "$notice_count" -ne 1 ]; then
-              echo "::error::Expected exactly one closing truncation note, found $notice_count."
+              echo "::error::Expected exactly one truncation note, found $notice_count."
               exit 1
             fi
             notice_line=$(grep -n 'microsoft-testing-platform:github:summary-truncated' "$GITHUB_STEP_SUMMARY" | cut -d: -f1)
-            last_condensed_line=$(grep -n 'condensed to one line' "$GITHUB_STEP_SUMMARY" | tail -1 | cut -d: -f1)
-            echo "Note at line $notice_line; last condensed verdict at line ${last_condensed_line:-none}"
-            if [ -n "$last_condensed_line" ] && [ "$notice_line" -lt "$last_condensed_line" ]; then
-              echo "::error::The closing note is above the last condensed verdict, so it is not closing the summary."
+            echo "Note at line $notice_line"
+            if [ "$notice_line" -ne 1 ]; then
+              echo "::error::The truncation note is at line $notice_line, not at the top of the summary."
               exit 1
             fi
-            echo "--- Closing note as rendered ---"
-            sed -n "${notice_line},$((notice_line + 2))p" "$GITHUB_STEP_SUMMARY"
+            echo "--- Note as rendered ---"
+            sed -n '1,3p' "$GITHUB_STEP_SUMMARY"
           fi
           grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || echo "No truncation notes (summary rendered in full)."
 
