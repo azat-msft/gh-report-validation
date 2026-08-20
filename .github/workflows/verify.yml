@@ -94,8 +94,24 @@ jobs:
           echo "Project sections: $(grep -c '^## .* Test Run Summary' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Expanded failure details: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Condensed project verdicts: $(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)"
           notice_count=$(grep -c 'microsoft-testing-platform:github:summary-truncated' "$GITHUB_STEP_SUMMARY" || true)
-          echo "Closing truncation notes: $notice_count"
+          echo "Truncation notes: $notice_count"
+
+          # The note is tied to the second degradation stage: it may appear only when whole project sections have
+          # actually been replaced by a one-line verdict. Shedding expanded diagnostics still names every project
+          # and every failing test, which is a shortened report rather than an incomplete one.
+          condensed=$(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)
+          if [ "$notice_count" -gt 0 ] && [ "$condensed" -eq 0 ]; then
+            echo "::error::The summary warns about omitted project results, but no project was condensed."
+            exit 1
+          fi
+          if [ "$condensed" -gt 0 ] && [ "$notice_count" -eq 0 ]; then
+            echo "::error::$condensed project(s) were condensed to one line without the summary saying so."
+            exit 1
+          fi
+
           if [ "$notice_count" -gt 0 ]; then
             # The note must be stated once and must lead the report: co-writers only ever append, so the top is the
             # one position nothing else can displace, and it is where a reader meets it before the affected sections.
@@ -112,6 +128,16 @@ jobs:
             echo "--- Note as rendered ---"
             sed -n '1,3p' "$GITHUB_STEP_SUMMARY"
           fi
+
+          # Whatever stage was reached, every test project must still be named: that is the guarantee the staged
+          # degradation exists to protect.
+          for project in Bulk*Tests; do
+            if ! grep -q "$project" "$GITHUB_STEP_SUMMARY"; then
+              echo "::error::$project is missing from the job summary entirely."
+              exit 1
+            fi
+          done
+          echo "All Bulk*Tests projects are represented in the summary."
           grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || echo "No truncation notes (summary rendered in full)."
 
           # The summary is only rendered by GitHub if it stays under the cap. Failing here would mean the
