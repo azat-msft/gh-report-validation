@@ -96,8 +96,11 @@ jobs:
           echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Expanded failure details: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Condensed project verdicts: $(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)"
-          notice_count=$(grep -c 'microsoft-testing-platform:github:summary-truncated' "$GITHUB_STEP_SUMMARY" || true)
+          # Match the opening marker only: the note is delimited by a start and an end marker, and a bare
+          # substring match would count both and report two notes where there is one.
+          notice_count=$(grep -c '^<!-- microsoft-testing-platform:github:summary-truncated -->$' "$GITHUB_STEP_SUMMARY" || true)
           echo "Truncation notes: $notice_count"
+          echo "Full project sections: $(grep -c '^<!-- microsoft-testing-platform:github:project-section -->$' "$GITHUB_STEP_SUMMARY" || true)"
 
           # The note is tied to the second degradation stage: it may appear only when whole project sections have
           # actually been replaced by a one-line verdict. Shedding expanded diagnostics still names every project
@@ -119,14 +122,23 @@ jobs:
               echo "::error::Expected exactly one truncation note, found $notice_count."
               exit 1
             fi
-            notice_line=$(grep -n 'microsoft-testing-platform:github:summary-truncated' "$GITHUB_STEP_SUMMARY" | cut -d: -f1)
+            notice_line=$(grep -n '^<!-- microsoft-testing-platform:github:summary-truncated -->$' "$GITHUB_STEP_SUMMARY" | cut -d: -f1)
             echo "Note at line $notice_line"
             if [ "$notice_line" -ne 1 ]; then
               echo "::error::The truncation note is at line $notice_line, not at the top of the summary."
               exit 1
             fi
             echo "--- Note as rendered ---"
-            sed -n '1,3p' "$GITHUB_STEP_SUMMARY"
+            sed -n '1,4p' "$GITHUB_STEP_SUMMARY"
+
+            # The note states how many test projects got their full results in. That number is the reason the note
+            # is useful, so check it against the sections actually present rather than trusting it.
+            sections=$(grep -c '^<!-- microsoft-testing-platform:github:project-section -->$' "$GITHUB_STEP_SUMMARY" || true)
+            if ! grep -q "full results of the first $sections test project" "$GITHUB_STEP_SUMMARY"; then
+              echo "::error::The note does not report $sections full project section(s), which is what the summary contains."
+              exit 1
+            fi
+            echo "Note correctly reports $sections full project section(s)."
           fi
 
           # Whatever stage was reached, every test project must still be named: that is the guarantee the staged
