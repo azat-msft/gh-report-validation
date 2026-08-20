@@ -95,6 +95,14 @@ jobs:
           echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Expanded failure details: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
+          omitted_notes=$(grep -c 'were omitted because the job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || true)
+          echo "Per-project omitted-details notes: $omitted_notes"
+          if [ "$omitted_notes" -eq 0 ]; then
+            echo "::error::No project reported dropped failure diagnostics, so a bare failure list would be indistinguishable from failures that carried none."
+            exit 1
+          fi
+          echo "--- One such note as rendered ---"
+          grep -m1 'were omitted because the job summary size limit was reached' "$GITHUB_STEP_SUMMARY"
           echo "Condensed project verdicts: $(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)"
           # Match the opening marker only: the note is delimited by a start and an end marker, and a bare
           # substring match would count both and report two notes where there is one.
