@@ -95,14 +95,14 @@ jobs:
           echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
           echo "Expanded failure details: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
-          omitted_notes=$(grep -c 'were omitted because the job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || true)
+          omitted_notes=$(grep -c 'were omitted because the error details already take up too much space' "$GITHUB_STEP_SUMMARY" || true)
           echo "Per-project omitted-details notes: $omitted_notes"
           if [ "$omitted_notes" -eq 0 ]; then
             echo "::error::No project reported dropped failure diagnostics, so a bare failure list would be indistinguishable from failures that carried none."
             exit 1
           fi
           echo "--- One such note as rendered ---"
-          grep -m1 'were omitted because the job summary size limit was reached' "$GITHUB_STEP_SUMMARY"
+          grep -m1 'were omitted because the error details already take up too much space' "$GITHUB_STEP_SUMMARY"
           echo "Condensed project verdicts: $(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)"
           # Match the opening marker only: the note is delimited by a start and an end marker, and a bare
           # substring match would count both and report two notes where there is one.
@@ -158,7 +158,13 @@ jobs:
             fi
           done
           echo "All Bulk*Tests projects are represented in the summary."
-          grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|job summary size limit was reached' "$GITHUB_STEP_SUMMARY" || echo "No truncation notes (summary rendered in full)."
+          # No message may claim GitHub's size limit was reached: the reporter starts shortening at 40% of the cap
+          # and condenses whole projects at 60%, so that claim is false everywhere it could appear.
+          if grep -q 'job summary size limit was reached' "$GITHUB_STEP_SUMMARY"; then
+            echo "::error::The summary claims GitHub's size limit was reached, but it is $summary_bytes of 1048576 bytes."
+            exit 1
+          fi
+          grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|already take up too much space|already takes up too much space' "$GITHUB_STEP_SUMMARY" | head -3 || echo "No truncation notes (summary rendered in full)."
 
           # The summary is only rendered by GitHub if it stays under the cap. Failing here would mean the
           # budgeting is broken and the whole summary would have been dropped from the run page.
