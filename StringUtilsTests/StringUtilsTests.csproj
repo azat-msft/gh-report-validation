@@ -3,7 +3,7 @@
   <ItemGroup>
     <PackageReference Include="TUnit" Version="1.57.0" />
     <!-- Locally-built Microsoft.Testing.Platform extension under validation (#9142). -->
-    <PackageReference Include="Microsoft.Testing.Extensions.GitHubActionsReport" Version="1.17.0-dev" />
+    <PackageReference Include="Microsoft.Testing.Extensions.GitHubActionsReport" Version="1.18.0-dev" />
     <!-- Pin the platform + MSBuild entry-point packages to the locally-built version so they unify
          with the version the extension was compiled against (newer than TUnit's transitive 2.2.x). -->
     <PackageReference Include="Microsoft.Testing.Platform" Version="2.4.0-dev" />
