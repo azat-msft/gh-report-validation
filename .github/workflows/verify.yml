@@ -57,15 +57,138 @@ jobs:
       # conclusion still reflects the test results while all annotations and the job summary are produced.
       # The slow test in CalculatorTests exercises ::notice via a low threshold; StringUtilsTests contains
       # deliberately failing tests that exercise ::error annotations and the "Failures" summary section.
+      #
+      # The 30 Bulk*Tests projects then run into the SAME summary file, which is the scenario under test:
+      # GitHub caps GITHUB_STEP_SUMMARY at 1 MiB for the whole step, so 30 projects each writing failure
+      # diagnostics must share that budget rather than each claiming it. If the file exceeded the cap GitHub
+      # would silently drop the entire summary, so the verification below asserts the size explicitly.
       - name: Run tests
         run: |
           set +e
-          dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh-slow-test-threshold 1
+          dotnet run --project CalculatorTests/CalculatorTests.csproj -c Release --no-build -- --report-gh --report-gh-slow-test-threshold 1
           calculator=$?
-          dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build
+          dotnet run --project StringUtilsTests/StringUtilsTests.csproj -c Release --no-build -- --report-gh
           stringutils=$?
           echo "Test project exit codes: calculator=$calculator, stringutils=$stringutils"
-          if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ]; then
+
+          echo "::group::Bulk test projects"
+          bulk_failures=0
+          for project in Bulk*Tests; do
+            dotnet run --project "$project/$project.csproj" -c Release --no-build -- --report-gh > /dev/null 2>&1
+            bulk_exit=$?
+            echo "$project exited with $bulk_exit"
+            if [ $bulk_exit -ne 0 ]; then
+              bulk_failures=$((bulk_failures + 1))
+            fi
+          done
+          echo "Bulk projects with failures: $bulk_failures"
+          echo "::endgroup::"
+
+          # GITHUB_STEP_SUMMARY is a per-step file, so the summary written by the reporters above can only
+          # be inspected from within this same step. Echo its size and the markers that prove which
+          # rendering path was taken, so the run log documents what the Summary page shows.
+          echo "::group::Job summary verification"
+          summary_bytes=$(wc -c < "$GITHUB_STEP_SUMMARY")
+          echo "Summary size: $summary_bytes bytes"
+          echo "GitHub limit: 1048576 bytes"
+          echo "Project sections: $(grep -c '^## .* Test Run Summary' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Collapsible failure sections: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Clipped values: $(grep -c '\[\.\.\. truncated\]' "$GITHUB_STEP_SUMMARY" || true)"
+          echo "Expanded failure details: $(grep -c '^<details>' "$GITHUB_STEP_SUMMARY" || true)"
+          omitted_notes=$(grep -c 'were omitted because the error details take up too much space' "$GITHUB_STEP_SUMMARY" || true)
+          echo "Per-project omitted-details notes: $omitted_notes"
+          if [ "$omitted_notes" -eq 0 ]; then
+            echo "::error::No project reported dropped failure diagnostics, so a bare failure list would be indistinguishable from failures that carried none."
+            exit 1
+          fi
+          echo "--- One such note as rendered ---"
+          grep -m1 'were omitted because the error details take up too much space' "$GITHUB_STEP_SUMMARY"
+          echo "Condensed project verdicts: $(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)"
+          # Match the opening marker only: the note is delimited by a start and an end marker, and a bare
+          # substring match would count both and report two notes where there is one.
+          notice_count=$(grep -c '^<!-- microsoft-testing-platform:github:summary-truncated -->$' "$GITHUB_STEP_SUMMARY" || true)
+          echo "Truncation notes: $notice_count"
+          echo "Full project sections: $(grep -c '^<!-- microsoft-testing-platform:github:project-section -->$' "$GITHUB_STEP_SUMMARY" || true)"
+
+          # The note is tied to the second degradation stage: it may appear only when whole project sections have
+          # actually been replaced by a one-line verdict. Shedding expanded diagnostics still names every project
+          # and every failing test, which is a shortened report rather than an incomplete one.
+          condensed=$(grep -c 'condensed to one line' "$GITHUB_STEP_SUMMARY" || true)
+          if [ "$notice_count" -gt 0 ] && [ "$condensed" -eq 0 ]; then
+            echo "::error::The summary warns about omitted project results, but no project was condensed."
+            exit 1
+          fi
+          if [ "$condensed" -gt 0 ] && [ "$notice_count" -eq 0 ]; then
+            echo "::error::$condensed project(s) were condensed to one line without the summary saying so."
+            exit 1
+          fi
+
+          if [ "$notice_count" -gt 0 ]; then
+            # The note must be stated once and must lead the report: co-writers only ever append, so the top is the
+            # one position nothing else can displace, and it is where a reader meets it before the affected sections.
+            if [ "$notice_count" -ne 1 ]; then
+              echo "::error::Expected exactly one truncation note, found $notice_count."
+              exit 1
+            fi
+            notice_line=$(grep -n '^<!-- microsoft-testing-platform:github:summary-truncated -->$' "$GITHUB_STEP_SUMMARY" | cut -d: -f1)
+            echo "Note at line $notice_line"
+            if [ "$notice_line" -ne 1 ]; then
+              echo "::error::The truncation note is at line $notice_line, not at the top of the summary."
+              exit 1
+            fi
+            echo "--- Note as rendered ---"
+            sed -n '1,4p' "$GITHUB_STEP_SUMMARY"
+
+            # The note states how many test projects got their full results in. That number is the reason the note
+            # is useful, so check it against the sections actually present rather than trusting it.
+            sections=$(grep -c '^<!-- microsoft-testing-platform:github:project-section -->$' "$GITHUB_STEP_SUMMARY" || true)
+            if ! grep -q "full results of the first $sections test project" "$GITHUB_STEP_SUMMARY"; then
+              echo "::error::The note does not report $sections full project section(s), which is what the summary contains."
+              exit 1
+            fi
+            echo "Note correctly reports $sections full project section(s)."
+          fi
+
+          # Whatever stage was reached, every test project must still be named: that is the guarantee the staged
+          # degradation exists to protect.
+          for project in Bulk*Tests; do
+            if ! grep -q "$project" "$GITHUB_STEP_SUMMARY"; then
+              echo "::error::$project is missing from the job summary entirely."
+              exit 1
+            fi
+          done
+          echo "All Bulk*Tests projects are represented in the summary."
+          # No message may claim GitHub's size limit was reached: the reporter starts shortening at 40% of the cap
+          # and condenses whole projects at 60%, so that claim is false everywhere it could appear.
+          if grep -q 'job summary size limit was reached' "$GITHUB_STEP_SUMMARY"; then
+            echo "::error::The summary claims GitHub's size limit was reached, but it is $summary_bytes of 1048576 bytes."
+            exit 1
+          fi
+          grep -E 'Showing the first [0-9]+ of [0-9]+ failed tests|take up too much space|takes up too much space' "$GITHUB_STEP_SUMMARY" | head -3 || echo "No truncation notes (summary rendered in full)."
+
+          # The summary is only rendered by GitHub if it stays under the cap. Failing here would mean the
+          # budgeting is broken and the whole summary would have been dropped from the run page.
+          if [ "$summary_bytes" -ge 1048576 ]; then
+            echo "::error::Job summary is $summary_bytes bytes, at or over GitHub's 1 MiB limit. GitHub will drop it."
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          # Keep a copy for post-run structural inspection: GITHUB_STEP_SUMMARY is a per-step temp file that is
+          # consumed by the runner, so it cannot be read from a later step or downloaded afterwards.
+          cp "$GITHUB_STEP_SUMMARY" "$GITHUB_WORKSPACE/job-summary.md"
+
+          if [ $calculator -ne 0 ] || [ $stringutils -ne 0 ] || [ $bulk_failures -ne 0 ]; then
             echo "One or more test projects failed."
             exit 1
           fi
+
+      # The bulk projects fail on purpose, so the step above always ends non-zero; upload regardless so the
+      # rendered summary can be inspected after the run.
+      - name: Upload job summary for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-summary
+          path: job-summary.md
+          if-no-files-found: error
