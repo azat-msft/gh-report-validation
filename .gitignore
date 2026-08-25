@@ -9,3 +9,5 @@ obj/
 TestResults/
 *.trx
 *.coverage
+
+global.json
